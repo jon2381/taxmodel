@@ -27,4 +27,56 @@ CPP_THRESHOLD = 68500  # Max salary for CPP deductions
 def calculate_taxes(income, brackets):
     """Calculates tax based on income and tax brackets (federal/provincial)."""
     tax = 0
-    prev_bracket =_
+    prev_bracket = 0
+
+    for bracket, rate in brackets:
+        if income > bracket:
+            tax += (bracket - prev_bracket) * rate
+            prev_bracket = bracket
+        else:
+            tax += (income - prev_bracket) * rate
+            break
+
+    return tax
+
+def model_income(salary, dividends):
+    cpp_contrib = CPP_MAX if salary > CPP_THRESHOLD else 0
+    federal_tax = calculate_taxes(salary, FEDERAL_BRACKETS)
+    provincial_tax = calculate_taxes(salary, PROVINCIAL_BRACKETS)
+    total_tax = federal_tax + provincial_tax
+    dividend_tax = calculate_taxes(dividends, PROVINCIAL_BRACKETS) + calculate_taxes(dividends, FEDERAL_BRACKETS) # Dividend taxes are taxed based on both federal and provincial rates
+    total_tax += dividend_tax
+    net_income = salary + dividends - total_tax - cpp_contrib
+    return federal_tax, provincial_tax, dividend_tax, cpp_contrib, total_tax, net_income
+
+# Streamlit User Interface
+st.title('Tax Model: Salary and Dividends')
+st.write("This tool helps you model the tax impact of salary and dividend income.")
+
+# User input for salary and dividends
+salary_input = st.number_input('Enter Salary (in CAD)', min_value=0, value=68500)
+dividend_input = st.number_input('Enter Dividend Income (in CAD)', min_value=0, value=0)
+
+# Call the model function to get results
+federal_tax, provincial_tax, dividend_tax, cpp_contrib, total_tax, net_income = model_income(salary_input, dividend_input)
+
+# Display results in a dataframe
+df = pd.DataFrame({
+    "Component": ["Federal Tax", "Provincial Tax", "Dividend Tax", "CPP Contribution", "Total Tax", "Net Income After Tax"],
+    "Amount (CAD)": [federal_tax, provincial_tax, dividend_tax, cpp_contrib, total_tax, net_income]
+})
+
+st.write(df)
+
+# Visualization: Create a chart for the results
+fig, ax = plt.subplots()
+labels = ['Federal Tax', 'Provincial Tax', 'Dividend Tax', 'CPP Contribution', 'Net Income After Tax']
+values = [federal_tax, provincial_tax, dividend_tax, cpp_contrib, net_income]
+
+ax.bar(labels, values, color=['blue', 'green', 'orange', 'red', 'purple'])
+ax.set_title('Tax Model: Salary and Dividends Breakdown')
+ax.set_ylabel('Amount (CAD)')
+ax.set_ylim(0, max(values) + 10000)
+
+# Display the chart
+st.pyplot(fig)
