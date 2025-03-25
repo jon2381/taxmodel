@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 
 # Tax rates for Ontario (2024)
 TAX_BRACKETS_SALARY = [
@@ -39,51 +40,46 @@ def calculate_taxes(income, brackets):
 
     return tax
 
-# Define function to determine required pre-tax income to get $80K after tax
-def get_required_income(brackets, target_net_income, cpp_contrib=0):
-    """Finds the required pre-tax income to achieve a target after-tax income."""
-    income = target_net_income + cpp_contrib  # Start with target + CPP estimate
-    step = 100  # Incremental adjustment step
-
-    while True:
-        tax = calculate_taxes(income, brackets)
-        net_income = income - tax - cpp_contrib
-
-        if abs(net_income - target_net_income) < 100:  # Close enough to $80K
-            return income, tax
-
-        income += step
+# Define function to model after-tax income based on salary and dividends
+def model_income(salary, dividends):
+    cpp_contrib = CPP_MAX if salary > CPP_THRESHOLD else 0
+    salary_tax = calculate_taxes(salary, TAX_BRACKETS_SALARY)
+    dividend_tax = calculate_taxes(dividends, TAX_BRACKETS_DIVIDEND)
+    
+    # Calculate total tax
+    total_tax = salary_tax + dividend_tax
+    net_income = salary + dividends - total_tax - cpp_contrib
+    return salary_tax, dividend_tax, cpp_contrib, total_tax, net_income
 
 # Streamlit User Interface
-st.title('Tax Model: Salary vs Dividends')
-st.write("This tool helps you calculate the best tax strategy for salary vs dividends.")
+st.title('Tax Model: Salary and Dividends')
+st.write("This tool helps you model the tax impact of salary and dividend income.")
 
+# User input for salary and dividends
 salary_input = st.number_input('Enter Salary (in CAD)', min_value=0, value=68500)
-target_income = st.number_input('Enter Desired After-Tax Income (in CAD)', min_value=0, value=80000)
+dividend_input = st.number_input('Enter Dividend Income (in CAD)', min_value=0, value=0)
 
-salary_1, tax_1 = get_required_income(TAX_BRACKETS_SALARY, target_income, CPP_MAX)
-cpp_1 = CPP_MAX
-net_income_1 = salary_1 - tax_1 - cpp_1
+# Call the model function to get results
+salary_tax, dividend_tax, cpp_contrib, total_tax, net_income = model_income(salary_input, dividend_input)
 
-salary_2 = CPP_THRESHOLD
-cpp_2 = CPP_MAX
-remaining_needed = target_income - (salary_2 - calculate_taxes(salary_2, TAX_BRACKETS_SALARY) - cpp_2)
-dividend_2, tax_div_2 = get_required_income(TAX_BRACKETS_DIVIDEND, remaining_needed)
-personal_tax_2 = calculate_taxes(salary_2, TAX_BRACKETS_SALARY) + tax_div_2
-net_income_2 = salary_2 + dividend_2 - personal_tax_2 - cpp_2
-
-dividend_3, tax_3 = get_required_income(TAX_BRACKETS_DIVIDEND, target_income)
-cpp_3 = 0
-net_income_3 = dividend_3 - tax_3
-
-# Displaying results in the app
+# Display results in a dataframe
 df = pd.DataFrame({
-    "Scenario": ["Salary Only", "Salary + Dividend Mix", "Dividends Only"],
-    "Salary Taken": [salary_1, salary_2, 0],
-    "Dividends Taken": [0, dividend_2, dividend_3],
-    "CPP Contributions": [cpp_1, cpp_2, cpp_3],
-    "Personal Taxes Paid": [tax_1, personal_tax_2, tax_3],
-    "Net Income After Tax": [net_income_1, net_income_2, net_income_3]
+    "Component": ["Salary", "Dividends", "CPP Contribution", "Total Tax", "Net Income After Tax"],
+    "Amount (CAD)": [salary_input, dividend_input, cpp_contrib, total_tax, net_income]
 })
 
 st.write(df)
+
+# Visualization: Create a chart for the results
+fig, ax = plt.subplots()
+labels = ['Salary', 'Dividends', 'CPP Contribution', 'Total Tax', 'Net Income After Tax']
+values = [salary_input, dividend_input, cpp_contrib, total_tax, net_income]
+
+ax.bar(labels, values, color=['blue', 'green', 'orange', 'red', 'purple'])
+ax.set_title('Tax Model: Salary and Dividends Breakdown')
+ax.set_ylabel('Amount (CAD)')
+ax.set_ylim(0, max(values) + 10000)
+
+# Display the chart
+st.pyplot(fig)
+
